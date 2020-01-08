@@ -4,20 +4,39 @@
   "metadata": {
     "name": "cakephp-example",
     "annotations": {
-      "description": "An example CakePHP application with no database",
-      "tags": "instant-app,php,cakephp",
-      "iconClass": "icon-php"
+      "openshift.io/display-name": "CakePHP",
+      "description": "An example CakePHP application with no database. For more information about using this template, including OpenShift considerations, see https://github.com/sclorg/cakephp-ex/blob/master/README.md.",
+      "tags": "quickstart,php,cakephp",
+      "iconClass": "icon-php",
+      "openshift.io/long-description": "This template defines resources needed to develop a CakePHP application, including a build configuration and application deployment configuration.  It does not include a database.",
+      "openshift.io/provider-display-name": "Red Hat, Inc.",
+      "openshift.io/documentation-url": "https://github.com/sclorg/cakephp-ex",
+      "openshift.io/support-url": "https://access.redhat.com",
+      "template.openshift.io/bindable": "false"
     }
   },
+  "message": "The following service(s) have been created in your project: ${NAME}.\n\nFor more information about using this template, including OpenShift considerations, see https://github.com/sclorg/cakephp-ex/blob/master/README.md.",
   "labels": {
-    "template": "cakephp-example"
+      "template": "cakephp-example",
+      "app": "cakephp-example"
   },
   "objects": [
+    {
+      "kind": "Secret",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "${NAME}"
+      },
+      "stringData" : {
+        "cakephp-secret-token" : "${CAKEPHP_SECRET_TOKEN}",
+        "cakephp-security-salt" : "${CAKEPHP_SECURITY_SALT}"
+      }
+    },
     {
       "kind": "Service",
       "apiVersion": "v1",
       "metadata": {
-        "name": "cakephp-example",
+        "name": "${NAME}",
         "annotations": {
           "description": "Exposes and load balances the application pods"
         }
@@ -31,7 +50,7 @@
           }
         ],
         "selector": {
-          "name": "cakephp-example" 
+          "name": "${NAME}"
         }
       }
     },
@@ -39,13 +58,13 @@
       "kind": "Route",
       "apiVersion": "v1",
       "metadata": {
-        "name": "cakephp-example"
+        "name": "${NAME}"
       },
       "spec": {
         "host": "${APPLICATION_DOMAIN}",
         "to": {
           "kind": "Service",
-          "name": "cakephp-example"
+          "name": "${NAME}"
         }
       }
     },
@@ -53,7 +72,7 @@
       "kind": "ImageStream",
       "apiVersion": "v1",
       "metadata": {
-        "name": "cakephp-example",
+        "name": "${NAME}",
         "annotations": {
           "description": "Keeps track of changes in the application image"
         }
@@ -63,9 +82,10 @@
       "kind": "BuildConfig",
       "apiVersion": "v1",
       "metadata": {
-        "name": "cakephp-example",
+        "name": "${NAME}",
         "annotations": {
-          "description": "Defines how to build the application"
+          "description": "Defines how to build the application",
+          "template.alpha.openshift.io/wait-for-ready": "true"
         }
       },
       "spec": {
@@ -82,15 +102,21 @@
           "sourceStrategy": {
             "from": {
               "kind": "ImageStreamTag",
-              "namespace": "openshift",
-              "name": "php:5.6"
-            }
+              "namespace": "${NAMESPACE}",
+              "name": "php:${PHP_VERSION}"
+            },
+            "env":  [
+              {
+                "name": "COMPOSER_MIRROR",
+                "value": "${COMPOSER_MIRROR}"
+              }
+            ]
           }
         },
         "output": {
           "to": {
             "kind": "ImageStreamTag",
-            "name": "cakephp-example:latest"
+            "name": "${NAME}:latest"
           }
         },
         "triggers": [
@@ -106,16 +132,20 @@
               "secret": "${GITHUB_WEBHOOK_SECRET}"
             }
           }
-        ]
+        ],
+        "postCommit": {
+          "script": "./vendor/bin/phpunit"
+        }
       }
     },
     {
       "kind": "DeploymentConfig",
       "apiVersion": "v1",
       "metadata": {
-        "name": "cakephp-example",
+        "name": "${NAME}",
         "annotations": {
-          "description": "Defines how to deploy the application server"
+          "description": "Defines how to deploy the application server",
+          "template.alpha.openshift.io/wait-for-ready": "true"
         }
       },
       "spec": {
@@ -132,7 +162,7 @@
               ],
               "from": {
                 "kind": "ImageStreamTag",
-                "name": "cakephp-example:latest"
+                "name": "${NAME}:latest"
               }
             }
           },
@@ -142,63 +172,72 @@
         ],
         "replicas": 1,
         "selector": {
-          "name": "cakephp-example"
+          "name": "${NAME}"
         },
         "template": {
           "metadata": {
-            "name": "cakephp-example",
+            "name": "${NAME}",
             "labels": {
-              "name": "cakephp-example"
+              "name": "${NAME}"
             }
           },
           "spec": {
             "containers": [
               {
                 "name": "cakephp-example",
-                "image": "cakephp-example",
+                "image": " ",
                 "ports": [
                   {
                     "containerPort": 8080
                   }
                 ],
+                "readinessProbe": {
+                  "timeoutSeconds": 3,
+                  "initialDelaySeconds": 3,
+                  "periodSeconds": 60,
+                  "httpGet": {
+                    "path": "/",
+                    "port": 8080
+                  }
+                },
+                "livenessProbe": {
+                  "timeoutSeconds": 3,
+                  "initialDelaySeconds": 30,
+                  "periodSeconds": 60,
+                  "httpGet": {
+                    "path": "/",
+                    "port": 8080
+                  }
+                },
                 "env": [
                   {
-                    "name": "DATABASE_SERVICE_NAME",
-                    "value": "${DATABASE_SERVICE_NAME}"
-                  },
-                  {
-                    "name": "DATABASE_ENGINE",
-                    "value": "${DATABASE_ENGINE}"
-                  },
-                  {
-                    "name": "DATABASE_NAME",
-                    "value": "${DATABASE_NAME}"
-                  },
-                  {
-                    "name": "DATABASE_USER",
-                    "value": "${DATABASE_USER}"
-                  },
-                  {
-                    "name": "DATABASE_PASSWORD",
-                    "value": "${DATABASE_PASSWORD}"
-                  },
-                  {
                     "name": "CAKEPHP_SECRET_TOKEN",
-                    "value": "${CAKEPHP_SECRET_TOKEN}"
+                    "valueFrom": {
+                      "secretKeyRef" : {
+                        "name" : "${NAME}",
+                        "key" : "cakephp-secret-token"
+                      }
+                    }
                   },
                   {
                     "name": "CAKEPHP_SECURITY_SALT",
-                    "value": "${CAKEPHP_SECURITY_SALT}"
-                  },
-                  {
-                    "name": "CAKEPHP_SECURITY_CIPHER_SEED",
-                    "value": "${CAKEPHP_SECURITY_CIPHER_SEED}"
+                    "valueFrom": {
+                      "secretKeyRef" : {
+                        "name" : "${NAME}",
+                        "key" : "cakephp-security-salt"
+                      }
+                    }
                   },
                   {
                     "name": "OPCACHE_REVALIDATE_FREQ",
                     "value": "${OPCACHE_REVALIDATE_FREQ}"
                   }
-                ]
+                ],
+                "resources": {
+                  "limits": {
+                    "memory": "${MEMORY_LIMIT}"
+                  }
+                }
               }
             ]
           }
@@ -208,71 +247,88 @@
   ],
   "parameters": [
     {
+      "name": "NAME",
+      "displayName": "Name",
+      "description": "The name assigned to all of the frontend objects defined in this template.",
+      "required": true,
+      "value": "cakephp-example"
+    },
+    {
+      "name": "NAMESPACE",
+      "displayName": "Namespace",
+      "description": "The OpenShift Namespace where the ImageStream resides.",
+      "required": true,
+      "value": "openshift"
+    },
+    {
+      "name": "PHP_VERSION",
+      "displayName": "PHP Version",
+      "description": "Version of PHP image to be used (7.3 or latest).",
+      "required": true,
+      "value": "7.3"
+    },
+    {
+      "name": "MEMORY_LIMIT",
+      "displayName": "Memory Limit",
+      "description": "Maximum amount of memory the container can use.",
+      "required": true,
+      "value": "512Mi"
+    },
+    {
       "name": "SOURCE_REPOSITORY_URL",
-      "description": "The URL of the repository with your application source code",
-      "value": "https://github.com/openshift/cakephp-ex.git"
+      "displayName": "Git Repository URL",
+      "description": "The URL of the repository with your application source code.",
+      "required": true,
+      "value": "https://github.com/sclorg/cakephp-ex.git"
     },
     {
       "name": "SOURCE_REPOSITORY_REF",
-      "description": "Set this to a branch name, tag or other ref of your repository if you are not using the default branch"
+      "displayName": "Git Reference",
+      "description": "Set this to a branch name, tag or other ref of your repository if you are not using the default branch."
     },
     {
       "name": "CONTEXT_DIR",
-      "description": "Set this to the relative path to your project if it is not in the root of your repository"
+      "displayName": "Context Directory",
+      "description": "Set this to the relative path to your project if it is not in the root of your repository."
     },
     {
       "name": "APPLICATION_DOMAIN",
+      "displayName": "Application Hostname",
       "description": "The exposed hostname that will route to the CakePHP service, if left blank a value will be defaulted.",
       "value": ""
     },
     {
       "name": "GITHUB_WEBHOOK_SECRET",
-      "description": "A secret string used to configure the GitHub webhook",
+      "displayName": "GitHub Webhook Secret",
+      "description": "Github trigger secret.  A difficult to guess string encoded as part of the webhook URL.  Not encrypted.",
       "generate": "expression",
       "from": "[a-zA-Z0-9]{40}"
     },
     {
-      "name": "DATABASE_SERVICE_NAME",
-      "description": "Database service name"
-    },
-    {
-      "name": "DATABASE_ENGINE",
-      "description": "Database engine: postgresql, mysql or sqlite (default)"
-    },
-    {
-      "name": "DATABASE_NAME",
-      "description": "Database name"
-    },
-    {
-      "name": "DATABASE_USER",
-      "description": "Database user name"
-    },
-    {
-      "name": "DATABASE_PASSWORD",
-      "description": "Database user password"
-    },
-    {
       "name": "CAKEPHP_SECRET_TOKEN",
-      "description": "Set this to a long random string",
+      "displayName": "CakePHP Secret Token",
+      "description": "Set this to a long random string.",
       "generate": "expression",
       "from": "[\\w]{50}"
     },
     {
       "name": "CAKEPHP_SECURITY_SALT",
-      "description": "Security salt for session hash",
+      "displayName": "CakePHP Security Salt",
+      "description": "Security salt for session hash.",
       "generate": "expression",
       "from": "[a-zA-Z0-9]{40}"
     },
     {
-      "name": "CAKEPHP_SECURITY_CIPHER_SEED",
-      "description": "Security cipher seed for session hash",
-      "generate": "expression",
-      "from": "[0-9]{30}"
+      "name": "OPCACHE_REVALIDATE_FREQ",
+      "displayName": "OPcache Revalidation Frequency",
+      "description": "How often to check script timestamps for updates, in seconds. 0 will result in OPcache checking for updates on every request.",
+      "value": "2"
     },
     {
-      "name": "OPCACHE_REVALIDATE_FREQ",
-      "description": "The How often to check script timestamps for updates, in seconds. 0 will result in OPcache checking for updates on every request.",
-      "value": "2"
+      "name": "COMPOSER_MIRROR",
+      "displayName": "Custom Composer Mirror URL",
+      "description": "The custom Composer mirror URL",
+      "value": ""
     }
   ]
 }
